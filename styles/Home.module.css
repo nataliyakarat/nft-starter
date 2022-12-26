@@ -68,10 +68,12 @@
 
 .center {
   display: flex;
+  flex-flow: column;
+  gap: 2rem;
   justify-content: center;
   align-items: center;
   position: relative;
-  padding: 4rem 0;
+  padding: 2rem 0;
 }
 
 .center::before {
