@@ -1,11 +1,155 @@
-import Head from 'next/head'
-import Image from 'next/image'
-import { Inter } from '@next/font/google'
-import styles from '../styles/Home.module.css'
+import { useState, useEffect } from "react";
+import { ethers } from "ethers";
 
-const inter = Inter({ subsets: ['latin'] })
+import Head from "next/head";
+import Image from "next/image";
+import { Inter } from "@next/font/google";
+
+import AlphaPouch from "../utils/AlphaPouch.json";
+import styles from "../styles/Home.module.css";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export default function Home() {
+  const CONTRACT_ADDRESS = "0xf319AAa8e53AaAA5aA220c048278B5d25B0EA4E3";
+  const [currentAccount, setCurrentAccount] = useState("");
+
+  const setupEventListener = async () => {
+    // Most of this looks the same as our function askContractToMintNft
+    try {
+      const { ethereum } = window;
+
+      if (ethereum) {
+        // Same stuff again
+        const provider = new ethers.providers.Web3Provider(ethereum);
+        const signer = provider.getSigner();
+        const connectedContract = new ethers.Contract(
+          CONTRACT_ADDRESS,
+          AlphaPouch.abi,
+          signer
+        );
+
+        // THIS IS THE MAGIC SAUCE.
+        // This will essentially "capture" our event when our contract throws it.
+        // If you're familiar with webhooks, it's very similar to that!
+        connectedContract.on("NewEpicNFTMinted", (from, tokenId) => {
+          console.log(from, tokenId.toNumber());
+          alert(
+            `Hey there! We've minted your NFT and sent it to your wallet. It may be blank right now. It can take a max of 10 min to show up on OpenSea. Here's the link: https://testnets.opensea.io/assets/${CONTRACT_ADDRESS}/${tokenId.toNumber()}`
+          );
+        });
+
+        console.log("Setup event listener!");
+      } else {
+        console.log("Ethereum object doesn't exist!");
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const connectWallet = async () => {
+    try {
+      const { ethereum } = window;
+
+      if (!ethereum) {
+        alert("Get MetaMask!");
+        return;
+      }
+
+      /*
+       * Fancy method to request access to account.
+       */
+      const accounts = await ethereum.request({
+        method: "eth_requestAccounts",
+      });
+
+      /*
+       * Boom! This should print out public address once we authorize Metamask.
+       */
+      console.log("Connected", accounts[0]);
+      let chainId = await ethereum.request({ method: "eth_chainId" });
+      console.log("Chain " + chainId);
+
+      // String, hex code of the chainId of the Goerli test network
+      const goerliChainId = "0x5";
+      if (chainId === goerliChainId) {
+        const account = accounts[0];
+        setCurrentAccount(account);
+        setupEventListener();
+      } else alert("Please connect to the Goerli Test Network!");
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const askContractToMintNft = async () => {
+    try {
+      const { ethereum } = window;
+
+      if (ethereum) {
+        const provider = new ethers.providers.Web3Provider(ethereum);
+        const signer = provider.getSigner();
+        const connectedContract = new ethers.Contract(
+          CONTRACT_ADDRESS,
+          AlphaPouch.abi,
+          signer
+        );
+
+        console.log("Going to pop wallet now to pay gas...");
+        let nftTxn = await connectedContract.makeAnEpicNFT();
+
+        console.log("Mining...please wait.");
+        await nftTxn.wait();
+
+        console.log(
+          `Minted, see transaction: https://goerli.etherscan.io/tx/${nftTxn.hash}`
+        );
+      } else {
+        console.log("Ethereum object doesn't exist!");
+      }
+    } catch (error) {
+      console.log(error);
+      if (error.message.includes("Sold out")) {
+        alert("Sold out");
+      }
+    }
+  };
+
+  useEffect(() => {
+    const checkIfWalletIsConnected = async () => {
+      const { ethereum } = window;
+
+      if (!ethereum) {
+        console.log("Make sure you have metamask!");
+        return;
+      } else {
+        console.log("We have the ethereum object", ethereum);
+
+        const accounts = await ethereum.request({ method: "eth_accounts" });
+
+        if (accounts.length !== 0) {
+          let chainId = await ethereum.request({ method: "eth_chainId" });
+          console.log("Chain " + chainId);
+
+          // String, hex code of the chainId of the Goerli test network
+          const goerliChainId = "0x5";
+          if (chainId === goerliChainId) {
+            const account = accounts[0];
+            console.log("Found an authorized account:", account);
+            setCurrentAccount(account);
+            setupEventListener();
+          } else alert("Please connect to the Goerli Test Network!");
+        } else {
+          console.log("No authorized account found");
+        }
+      }
+    };
+    console.log("Current account:", currentAccount);
+
+    if (currentAccount === "") checkIfWalletIsConnected();
+  }, [currentAccount]);
+
   return (
     <>
       <Head>
@@ -16,108 +160,42 @@ export default function Home() {
       </Head>
       <main className={styles.main}>
         <div className={styles.description}>
-          <p>
-            Get started by editing&nbsp;
-            <code className={styles.code}>pages/index.js</code>
-          </p>
           <div>
-            <a
-              href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              By{' '}
-              <Image
-                src="/vercel.svg"
-                alt="Vercel Logo"
-                className={styles.vercelLogo}
-                width={100}
-                height={24}
-                priority
-              />
+            <a href="" target="_blank" rel="noopener noreferrer">
+              Buildspace Mint
             </a>
           </div>
         </div>
 
         <div className={styles.center}>
-          <Image
-            className={styles.logo}
-            src="/next.svg"
-            alt="Next.js Logo"
-            width={180}
-            height={37}
-            priority
-          />
-          <div className={styles.thirteen}>
-            <Image
-              src="/thirteen.svg"
-              alt="13"
-              width={40}
-              height={31}
-              priority
-            />
-          </div>
+          {currentAccount === "" ? (
+            <button onClick={connectWallet} className={styles.connectwallet}>
+              Connect to Wallet
+            </button>
+          ) : (
+            <button
+              onClick={askContractToMintNft}
+              className={styles.connectwallet}
+            >
+              Mint NFT
+            </button>
+          )}
         </div>
 
-        <div className={styles.grid}>
+        <div>
           <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
+            href="https://testnets.opensea.io/collection/squarenft-t0yt9rp73j"
             className={styles.card}
             target="_blank"
             rel="noopener noreferrer"
           >
             <h2 className={inter.className}>
-              Docs <span>-&gt;</span>
+              🌊 View Collection on OpenSea <span>-&gt;</span>
             </h2>
-            <p className={inter.className}>
-              Find in-depth information about Next.js features and&nbsp;API.
-            </p>
-          </a>
-
-          <a
-            href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <h2 className={inter.className}>
-              Learn <span>-&gt;</span>
-            </h2>
-            <p className={inter.className}>
-              Learn about Next.js in an interactive course with&nbsp;quizzes!
-            </p>
-          </a>
-
-          <a
-            href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <h2 className={inter.className}>
-              Templates <span>-&gt;</span>
-            </h2>
-            <p className={inter.className}>
-              Discover and deploy boilerplate example Next.js&nbsp;projects.
-            </p>
-          </a>
-
-          <a
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <h2 className={inter.className}>
-              Deploy <span>-&gt;</span>
-            </h2>
-            <p className={inter.className}>
-              Instantly deploy your Next.js site to a shareable URL
-              with&nbsp;Vercel.
-            </p>
+            <p className={inter.className}>Find more information</p>
           </a>
         </div>
       </main>
     </>
-  )
+  );
 }
